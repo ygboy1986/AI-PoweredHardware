@@ -1,0 +1,12 @@
+# 本机密钥和开发配置
+.env
+
+# Python 缓存与测试输出
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Xcode 本机用户数据与构建产物
+DerivedData/
+*.xcuserstate
+xcuserdata/
