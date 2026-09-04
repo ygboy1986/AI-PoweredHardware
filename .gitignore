@@ -6,6 +6,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# 健康数据响应记录（可能含个人敏感信息）
+data/guardian_responses/
+
 # Xcode 本机用户数据与构建产物
 DerivedData/
 *.xcuserstate

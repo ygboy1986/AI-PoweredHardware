@@ -10,6 +10,10 @@
 
 复制 `.env.example` 的变量到本机 `.env`，填入仅供服务端使用的 `ED_WATCH_API_TOKEN`。随后调用 `POST /v1/devices/{device_id}/sync-health-analysis`，服务端会调用 `Device/HealthInfo` 并将 `HeartRate`、`BloodOxygen`、`BloodMax`、`BloodMin` 与 `Temperature` 转换为统一健康读数后进行风险分析。设备返回的 `0` 视为“尚无有效测量”，不会被当作健康数据。`BloodSuger` 的实际单位需先与设备协议确认，当前仅保留原始读数，不执行阈值判断。
 
+## 返回数据文件
+
+每次风险分析、同步健康分析和人工确认成功后，返回结果会追加到 `data/guardian_responses/responses-YYYY-MM-DD.jsonl`。每一行是一条 JSON 记录，包含记录时间、接口路径和返回数据。该目录可能包含健康信息，已被 Git 忽略。
+
 ## 启动
 
 ```bash

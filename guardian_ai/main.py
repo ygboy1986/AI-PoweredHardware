@@ -6,6 +6,7 @@ from .agent import GuardianRiskAgent
 from .ed_watch_repository import EdWatchAPIError, EdWatchHealthRepository
 from .health_rules import default_health_engine
 from .models import AuditRecord, ConfirmationRequest, HealthSnapshot
+from .response_store import ResponseStore
 from .tools import DemoDeviceRepository, build_read_only_tools
 
 # 创建 FastAPI 应用。启动 uvicorn 后，/docs 会自动生成接口调试页面。
@@ -29,6 +30,9 @@ audit_log: list[AuditRecord] = []
 # 键由一次分析请求 ID 和写操作名称共同组成。
 executed_actions: set[tuple[str, str]] = set()
 
+# 接口返回结果按天追加写入 data/guardian_responses/，供后续分析和复盘。
+response_store = ResponseStore()
+
 
 @app.get("/health")
 def health() -> dict[str, str]:
@@ -39,7 +43,9 @@ def health() -> dict[str, str]:
 @app.post("/v1/devices/{device_id}/risk-report")
 def risk_report(device_id: int):
     """演示接口：调用预置的只读设备工具，生成今日风险概览。"""
-    return agent.analyze_today(device_id)
+    report = agent.analyze_today(device_id)
+    response_store.append("/v1/devices/{device_id}/risk-report", report)
+    return report
 
 
 @app.post("/v1/devices/{device_id}/health-analysis")
@@ -49,7 +55,9 @@ def health_analysis(device_id: int, snapshot: HealthSnapshot):
     本接口只分析数据和提出建议；即使判定为高风险，也绝不自动执行
     通知或设备报警。写操作必须由监护人在 confirm_action 中明确确认。
     """
-    return agent.analyze_health(device_id, snapshot)
+    report = agent.analyze_health(device_id, snapshot)
+    response_store.append("/v1/devices/{device_id}/health-analysis", report)
+    return report
 
 
 @app.post("/v1/devices/{device_id}/sync-health-analysis")
@@ -61,7 +69,9 @@ def sync_health_analysis(device_id: int):
     except EdWatchAPIError as error:
         # Token、网络和设备同步异常不应导致 API 崩溃，也不向客户端泄露 Token。
         raise HTTPException(status_code=502, detail=str(error)) from error
-    return agent.analyze_health(device_id, snapshot)
+    report = agent.analyze_health(device_id, snapshot)
+    response_store.append("/v1/devices/{device_id}/sync-health-analysis", report)
+    return report
 
 
 @app.get("/v1/capabilities/health-rules")
@@ -88,6 +98,7 @@ def confirm_action(request: ConfirmationRequest) -> AuditRecord:
                          action=request.action, actor=request.confirmed_by,
                          created_at=datetime.now(timezone.utc))
     audit_log.append(record)
+    response_store.append("/v1/actions/confirm", record)
     return record
 
 
