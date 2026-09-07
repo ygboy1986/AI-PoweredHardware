@@ -62,10 +62,10 @@ class RiskReport(BaseModel):
 class AIHealthExplanation(BaseModel):
     """大模型对规则结果的用户可读解释，不承担医疗诊断或报警决策。"""
 
-    risk_level: RiskLevel
-    summary: str = Field(min_length=1, max_length=200)
-    reasons: list[str] = Field(min_length=1, max_length=5)
-    requires_human_confirmation: bool
+    risk_level: RiskLevel  # 只能是固定风险等级
+    summary: str = Field(min_length=1, max_length=200) # 给用户看的简短说明
+    reasons: list[str] = Field(min_length=1, max_length=5) # 异常原因列表
+    requires_human_confirmation: bool# 是否需要监护人确认
 
 
 class ExplainedRiskReport(BaseModel):
@@ -73,6 +73,43 @@ class ExplainedRiskReport(BaseModel):
 
     risk_report: RiskReport
     ai_explanation: AIHealthExplanation
+    ai_provider: str
+    fallback_used: bool
+
+
+class LogAnalysisRequest(BaseModel):
+    """日志 AI 分析器的输入；可来自刷机日志、服务日志或 iOS 崩溃日志。"""
+
+    log_text: str = Field(min_length=1, max_length=20_000)
+    source: str = Field(default="manual", min_length=1, max_length=50)
+
+
+class ParsedLogEntry(BaseModel):
+    """解析后的单条日志。无法识别时间时 timestamp 保持为空。"""
+
+    timestamp: datetime | None = None
+    level: str
+    message: str
+
+
+class LogAIAnalysis(BaseModel):
+    """第 4 周日志 AI 分析器的固定输出契约。"""
+
+    error_type: str = Field(min_length=1, max_length=80)
+    severity: str = Field(pattern="^(low|medium|high)$")
+    summary: str = Field(min_length=1, max_length=200)
+    key_evidence: list[str] = Field(min_length=1, max_length=5)
+    possible_causes: list[str] = Field(min_length=1, max_length=5)
+    check_steps: list[str] = Field(min_length=1, max_length=5)
+    danger_warnings: list[str] = Field(default_factory=list, max_length=3)
+
+
+class LogAnalysisResponse(BaseModel):
+    """API 返回：原始日志的基础解析结果 + AI 结构化结论。"""
+
+    source: str
+    parsed_entries: list[ParsedLogEntry]
+    analysis: LogAIAnalysis
     ai_provider: str
     fallback_used: bool
 

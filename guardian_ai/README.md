@@ -18,6 +18,10 @@
 
 调用 `POST /v1/devices/{device_id}/ai-health-explanation`。它先执行本地健康规则，再生成 `risk_level`、`summary`、`reasons` 和 `requires_human_confirmation` 的固定 JSON。默认 `GUARDIAN_LLM_MODE=mock`，可离线学习和测试；设置为 `openai` 后，需要在 `.env` 中配置服务端专用的 `OPENAI_API_KEY` 与 `OPENAI_MODEL`。模型只能解释规则结果，不能改变风险等级或绕过人工确认。
 
+## 第 4 周：日志 AI 分析器 V0.1
+
+调用 `POST /v1/logs/analyze`，请求体传入 `log_text` 和可选的 `source`。服务先识别 `[时间] ERROR:消息`、`时间 [ERROR] 消息` 与无前缀的错误文本，再生成固定的 `error_type`、`key_evidence`、`possible_causes`、`check_steps` 与 `danger_warnings`。默认 mock 模式可分析当前 `data/Error.log` 中的 Pydantic 校验错误和 JSON 格式错误；openai 模式使用同一份 JSON Schema 输出结构。
+
 ## 启动
 
 ```bash

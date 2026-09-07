@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 
 from .agent import GuardianRiskAgent
 from .ed_watch_repository import EdWatchAPIError, EdWatchHealthRepository
 from .health_rules import default_health_engine
 from .llm_explainer import ExplanationError, get_health_explainer
-from .models import AuditRecord, ConfirmationRequest, ExplainedRiskReport, HealthSnapshot
+from .log_analyzer import LogAIAnalyzer
+from .models import (AuditRecord, ConfirmationRequest, ExplainedRiskReport,
+                     HealthSnapshot, LogAnalysisRequest, LogAnalysisResponse)
 from .response_store import ResponseStore
 from .tools import DemoDeviceRepository, build_read_only_tools
 
@@ -16,7 +18,7 @@ app = FastAPI(title="Guardian AI", version="0.1.0")
 # 注册默认健康规则：心率、血氧、血压和疑似跌倒。
 # 新增健康能力时，可在 health_rules.py 中创建规则后注册到此引擎。
 # 健康规则引擎--规则集合
-health_engine = default_health_engine()
+health_engine = default_health_engine()#None
 
 # 当前使用内存中的模拟设备数据，方便先完成端到端联调。
 # 生产环境应替换为带鉴权的设备、健康和位置业务服务。
@@ -33,12 +35,21 @@ executed_actions: set[tuple[str, str]] = set()
 
 # 接口返回结果按天追加写入 data/guardian_responses/，供后续分析和复盘。
 response_store = ResponseStore()
+log_ai_analyzer = LogAIAnalyzer()
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
     """供 iOS、负载均衡或监控系统检测服务是否存活。"""
     return {"status": "ok"}
+
+
+@app.post("/v1/logs/analyze")
+def analyze_log(request: LogAnalysisRequest) -> LogAnalysisResponse:
+    """第 4 周日志 AI 分析器：解析日志并返回固定 JSON 结论。"""
+    response = log_ai_analyzer.analyze(request)
+    response_store.append("/v1/logs/analyze", response)
+    return response
 
 
 @app.post("/v1/devices/{device_id}/risk-report")
@@ -61,7 +72,16 @@ def health_analysis(device_id: int, snapshot: HealthSnapshot):
     return report
 
 
-@app.post("/v1/devices/{device_id}/ai-health-explanation")
+#@app.post("/v1/devices/{device_id}/ai-health-explanation")
+@app.post(
+    "/v1/devices/{device_id}/ai-health-explanation",
+    response_model=ExplainedRiskReport,
+    responses={
+        503: {
+            "description": "健康规则引擎未配置",
+        },
+    },
+)
 def ai_health_explanation(device_id: int, snapshot: HealthSnapshot) -> ExplainedRiskReport:
     """先由本地规则判定风险，再由模型生成固定 JSON 格式的用户说明。"""
     report = agent.analyze_health(device_id, snapshot)
@@ -72,6 +92,11 @@ def ai_health_explanation(device_id: int, snapshot: HealthSnapshot) -> Explained
             risk_report=report, ai_explanation=explanation,
             ai_provider=explainer.provider_name, fallback_used=False,
         )
+    except RuntimeError as error:
+        raise HTTPException(
+          status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+          detail=str(error),
+        ) from error   
     except ExplanationError:
         # 模型无 Key、超时或格式异常时仍可交付安全的固定说明。
         from .llm_explainer import MockHealthExplainer
