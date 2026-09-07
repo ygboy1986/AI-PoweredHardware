@@ -14,6 +14,10 @@
 
 每次风险分析、同步健康分析和人工确认成功后，返回结果会追加到 `data/guardian_responses/responses-YYYY-MM-DD.jsonl`。每一行是一条 JSON 记录，包含记录时间、接口路径和返回数据。该目录可能包含健康信息，已被 Git 忽略。
 
+## 第 4 周：大模型结构化解释
+
+调用 `POST /v1/devices/{device_id}/ai-health-explanation`。它先执行本地健康规则，再生成 `risk_level`、`summary`、`reasons` 和 `requires_human_confirmation` 的固定 JSON。默认 `GUARDIAN_LLM_MODE=mock`，可离线学习和测试；设置为 `openai` 后，需要在 `.env` 中配置服务端专用的 `OPENAI_API_KEY` 与 `OPENAI_MODEL`。模型只能解释规则结果，不能改变风险等级或绕过人工确认。
+
 ## 启动
 
 ```bash

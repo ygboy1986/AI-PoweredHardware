@@ -5,7 +5,8 @@ from fastapi import FastAPI, HTTPException
 from .agent import GuardianRiskAgent
 from .ed_watch_repository import EdWatchAPIError, EdWatchHealthRepository
 from .health_rules import default_health_engine
-from .models import AuditRecord, ConfirmationRequest, HealthSnapshot
+from .llm_explainer import ExplanationError, get_health_explainer
+from .models import AuditRecord, ConfirmationRequest, ExplainedRiskReport, HealthSnapshot
 from .response_store import ResponseStore
 from .tools import DemoDeviceRepository, build_read_only_tools
 
@@ -58,6 +59,29 @@ def health_analysis(device_id: int, snapshot: HealthSnapshot):
     report = agent.analyze_health(device_id, snapshot)
     response_store.append("/v1/devices/{device_id}/health-analysis", report)
     return report
+
+
+@app.post("/v1/devices/{device_id}/ai-health-explanation")
+def ai_health_explanation(device_id: int, snapshot: HealthSnapshot) -> ExplainedRiskReport:
+    """先由本地规则判定风险，再由模型生成固定 JSON 格式的用户说明。"""
+    report = agent.analyze_health(device_id, snapshot)
+    try:
+        explainer = get_health_explainer()
+        explanation = explainer.explain(report)
+        response = ExplainedRiskReport(
+            risk_report=report, ai_explanation=explanation,
+            ai_provider=explainer.provider_name, fallback_used=False,
+        )
+    except ExplanationError:
+        # 模型无 Key、超时或格式异常时仍可交付安全的固定说明。
+        from .llm_explainer import MockHealthExplainer
+        explanation = MockHealthExplainer().explain(report)
+        response = ExplainedRiskReport(
+            risk_report=report, ai_explanation=explanation,
+            ai_provider="mock_fallback", fallback_used=True,
+        )
+    response_store.append("/v1/devices/{device_id}/ai-health-explanation", response)
+    return response
 
 
 @app.post("/v1/devices/{device_id}/sync-health-analysis")

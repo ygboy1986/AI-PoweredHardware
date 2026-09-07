@@ -59,6 +59,24 @@ class RiskReport(BaseModel):
     tool_audit: list[ToolAudit]
 
 
+class AIHealthExplanation(BaseModel):
+    """大模型对规则结果的用户可读解释，不承担医疗诊断或报警决策。"""
+
+    risk_level: RiskLevel
+    summary: str = Field(min_length=1, max_length=200)
+    reasons: list[str] = Field(min_length=1, max_length=5)
+    requires_human_confirmation: bool
+
+
+class ExplainedRiskReport(BaseModel):
+    """规则报告与模型解释的组合响应。"""
+
+    risk_report: RiskReport
+    ai_explanation: AIHealthExplanation
+    ai_provider: str
+    fallback_used: bool
+
+
 class HealthReading(BaseModel):
     """一条可扩展的健康读数。metric 可使用 heart_rate、spo2、blood_pressure_* 等，也可自定义。"""
 
