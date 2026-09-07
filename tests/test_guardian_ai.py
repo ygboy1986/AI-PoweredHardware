@@ -40,3 +40,19 @@ def test_ai_health_explanation_works_without_api_key_in_mock_mode(monkeypatch) -
     assert response.status_code == 200
     assert response.json()["ai_provider"] == "mock"
     assert response.json()["ai_explanation"]["risk_level"] == "high"
+
+
+def test_log_file_upload_is_analyzed(monkeypatch) -> None:
+    monkeypatch.setenv("GUARDIAN_LLM_MODE", "mock")
+    response = client.post(
+        "/v1/logs/upload",
+        files={"file": ("Error.log", b"ERROR: JSON input should be string, bytes or bytearray", "text/plain")},
+    )
+    assert response.status_code == 200
+    assert response.json()["source"] == "Error.log"
+    assert response.json()["analysis"]["error_type"] == "json_parse_error"
+
+
+def test_log_file_upload_rejects_non_log_file() -> None:
+    response = client.post("/v1/logs/upload", files={"file": ("photo.png", b"fake", "image/png")})
+    assert response.status_code == 415

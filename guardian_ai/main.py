@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, File, HTTPException, UploadFile, status
 
 from .agent import GuardianRiskAgent
 from .ed_watch_repository import EdWatchAPIError, EdWatchHealthRepository
@@ -36,6 +36,7 @@ executed_actions: set[tuple[str, str]] = set()
 # 接口返回结果按天追加写入 data/guardian_responses/，供后续分析和复盘。
 response_store = ResponseStore()
 log_ai_analyzer = LogAIAnalyzer()
+MAX_LOG_FILE_BYTES = 1_000_000  # 演示版上限 1 MB，防止异常大文件耗尽服务内存。
 
 
 @app.get("/health")
@@ -49,6 +50,29 @@ def analyze_log(request: LogAnalysisRequest) -> LogAnalysisResponse:
     """第 4 周日志 AI 分析器：解析日志并返回固定 JSON 结论。"""
     response = log_ai_analyzer.analyze(request)
     response_store.append("/v1/logs/analyze", response)
+    return response
+
+
+@app.post("/v1/logs/upload")
+async def upload_log(file: UploadFile = File(...)) -> LogAnalysisResponse:
+    """上传 UTF-8 编码的 .log/.txt 文件，再复用日志 AI 分析流程。
+
+    接口只保存结构化分析结果，不保存上传的原始日志文件。
+    """
+    filename = file.filename or "uploaded.log"
+    if not filename.lower().endswith((".log", ".txt")):
+        raise HTTPException(status_code=415, detail="仅支持 .log 或 .txt 日志文件")
+    content = await file.read(MAX_LOG_FILE_BYTES + 1)
+    if len(content) > MAX_LOG_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="日志文件不能超过 1 MB")
+    try:
+        # utf-8-sig 同时兼容 Windows 常见的 BOM 编码文本。
+        log_text = content.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise HTTPException(status_code=422, detail="日志文件必须使用 UTF-8 编码") from error
+
+    response = log_ai_analyzer.analyze(LogAnalysisRequest(log_text=log_text, source=filename))
+    response_store.append("/v1/logs/upload", response)
     return response
 
 

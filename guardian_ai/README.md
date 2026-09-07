@@ -22,6 +22,8 @@
 
 调用 `POST /v1/logs/analyze`，请求体传入 `log_text` 和可选的 `source`。服务先识别 `[时间] ERROR:消息`、`时间 [ERROR] 消息` 与无前缀的错误文本，再生成固定的 `error_type`、`key_evidence`、`possible_causes`、`check_steps` 与 `danger_warnings`。默认 mock 模式可分析当前 `data/Error.log` 中的 Pydantic 校验错误和 JSON 格式错误；openai 模式使用同一份 JSON Schema 输出结构。
 
+也可调用 `POST /v1/logs/upload`，在 Swagger 页面直接选择 UTF-8 编码的 `.log` 或 `.txt` 文件。演示版限制文件最大 1 MB，并且不会保存原始上传文件，只保存其结构化分析结果。
+
 ## 启动
 
 ```bash
